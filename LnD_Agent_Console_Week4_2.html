@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>L&amp;D Agent Console — Tata Steel (Week 4)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  :root {
+    /* Foundry-at-night palette: cold blued steel + a single hot molten accent */
+    --bg: #0b0d10;
+    --panel: #14171b;
+    --panel-2: #191d22;
+    --border: #262b31;
+    --border-hot: #4a2c17;
+    --text: #eae6dd;
+    --muted: #7c828a;
+    --amber: #ff7a29;        /* molten steel — the one hot accent */
+    --amber-dim: #a8481e;
+    --teal: #5aa9d6;         /* coolant blue — secondary/cool signal */
+    --alert: #e0453c;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --display: 'Oswald', var(--sans);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; color: var(--text); font-family: var(--sans); height: 100%; }
+  body {
+    display: flex; flex-direction: column; min-height: 640px;
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(255,122,41,0.07), transparent 60%),
+      repeating-linear-gradient(115deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  }
+
+  /* ---------- HEADER ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px; border-bottom: 1px solid var(--border); background: var(--panel);
+    flex-wrap: wrap; gap: 10px; position: relative;
+  }
+  header::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+    background: linear-gradient(90deg, var(--amber) 0%, transparent 28%);
+    opacity: 0.6;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 32px; height: 32px; flex-shrink: 0;
+    background: radial-gradient(circle at 35% 30%, #ffb066, var(--amber) 45%, var(--amber-dim) 100%);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    box-shadow: 0 0 14px rgba(255,122,41,0.55);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 600; color: #16110a; font-size: 12px;
+  }
+  .brand-text h1 { font-family: var(--display); font-size: 17px; margin: 0; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; }
+  .brand-text p { margin: 2px 0 0; font-size: 11px; color: var(--muted); letter-spacing: 0.4px; font-family: var(--mono); }
+
+  .pipeline { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; }
+  .pipeline .stage { color: var(--muted); padding: 5px 10px; border: 1px solid var(--border); border-radius: 2px; transition: all .25s ease; }
+  .pipeline .stage.active { color: #1a1206; background: var(--amber); border-color: var(--amber); font-weight: 700; box-shadow: 0 0 10px rgba(255,122,41,0.5); }
+  .pipeline .arrow { color: var(--border); }
+
+  /* ---------- PERSONA / PERSONALIZATION ---------- */
+  .persona-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel-2); flex-wrap: wrap; }
+  .persona-bar label { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 600; font-family: var(--mono); }
+  .persona-bar select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 2px; padding: 6px 10px; font-size: 12px; font-family: var(--sans); }
+  .persona-bar select:focus { outline: none; border-color: var(--teal); }
+  .persona-hint { font-size: 11px; color: var(--teal); font-family: var(--mono); }
+
+  .msg .conf { display: block; margin-top: 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.3px; }
+  .msg .conf.high { color: var(--teal); }
+  .msg .conf.med { color: var(--amber); }
+  .msg .conf.low { color: var(--alert); }
+  .msg.agent.followup { border-color: var(--teal); }
+
+  /* ---------- LAYOUT ---------- */
+  .layout { display: grid; grid-template-columns: 260px 1fr 320px; flex: 1; min-height: 0; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+  .panel:last-child { border-right: none; }
+  .panel-head { padding: 12px 16px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--panel); }
+
+  /* ---------- KNOWLEDGE BASE ---------- */
+  .kb-list { overflow-y: auto; padding: 10px; flex: 1; }
+  .kb-card { background: var(--panel-2); border: 1px solid var(--border); border-left: 2px solid var(--border); border-radius: 2px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color .2s; }
+  .kb-card:hover { border-left-color: var(--amber-dim); }
+  .kb-card .tag { display: inline-block; font-family: var(--mono); font-size: 9.5px; color: var(--teal); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 5px; }
+  .kb-card .title { font-size: 12.5px; font-weight: 600; line-height: 1.35; }
+  .kb-card.doc-open { border-left-color: var(--amber); border-left-width: 3px; }
+  .kb-preview { padding: 0 16px 14px; font-size: 11.5px; color: var(--muted); line-height: 1.55; border-bottom: 1px solid var(--border); max-height: 220px; overflow-y: auto; }
+
+  /* ---------- CHAT ---------- */
+  .chat-col { display: flex; flex-direction: column; min-height: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .chip { font-size: 10.5px; padding: 5px 9px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 20px; color: var(--muted); cursor: pointer; transition: all .2s; }
+  .chip:hover { color: var(--text); border-color: var(--teal); }
+  .chip.offtopic { color: var(--alert); border-color: #4a2a22; }
+
+  .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 88%; padding: 10px 13px; border-radius: 3px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, #ffb066, var(--amber)); color: #1a1206; font-weight: 500; }
+  .msg.agent { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); }
+  .msg.agent.refused { border-color: var(--alert); }
+  .msg .src { display: block; margin-top: 8px; font-family: var(--mono); font-size: 10px; color: var(--teal); letter-spacing: 0.3px; }
+  .msg.agent.refused .src { color: var(--alert); }
+  .msg.pending { color: var(--muted); font-style: italic; }
+
+  .input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--panel); }
+  .input-row input { flex: 1; background: var(--panel-2); border: 1px solid var(--border); border-radius: 2px; color: var(--text); padding: 10px 12px; font-size: 13px; font-family: var(--sans); }
+  .input-row input:focus { outline: none; border-color: var(--amber); }
+  .input-row button { background: linear-gradient(135deg, #ffb066, var(--amber)); border: none; border-radius: 2px; padding: 0 18px; font-weight: 700; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; color: #1a1206; cursor: pointer; transition: box-shadow .2s; }
+  .input-row button:hover:not(:disabled) { box-shadow: 0 0 12px rgba(255,122,41,0.5); }
+  .input-row button:disabled { background: var(--amber-dim); cursor: not-allowed; }
+
+  /* ---------- TRACE ---------- */
+  .trace { flex: 1; overflow-y: auto; padding: 14px 16px; font-family: var(--mono); font-size: 11px; line-height: 1.7; background: var(--bg); }
+  .trace-line { color: var(--muted); margin-bottom: 2px; opacity: 0; animation: fadeIn .3s ease forwards; }
+  .trace-line .tag-tool { color: var(--teal); font-weight: 600; }
+  .trace-line .tag-hit { color: var(--amber); }
+  .trace-line .tag-warn { color: var(--alert); }
+  .trace-empty { color: var(--muted); font-family: var(--mono); font-size: 11px; opacity: 0.6; }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  footer { border-top: 1px solid var(--border); background: var(--panel); padding: 8px 22px; font-size: 10.5px; color: var(--muted); text-align: center; letter-spacing: 0.3px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">AI</div>
+    <div class="brand-text">
+      <h1>L&amp;D Agent Console</h1>
+      <p>Tata Steel — Week 4 Prototype · Context-Aware AI Assistant</p>
+    </div>
+  </div>
+  <div class="pipeline" id="pipeline">
+    <div class="stage" data-stage="input">Input</div>
+    <div class="arrow">→</div>
+    <div class="stage" data-stage="retrieve">Retrieve</div>
+    <div class="arrow">→</div>
+    <div class="stage" data-stage="personalize">Personalize</div>
+    <div class="arrow">→</div>
+    <div class="stage" data-stage="output">Output</div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="panel">
+    <div class="panel-head">Knowledge Base</div>
+    <div class="kb-list" id="kbList"></div>
+  </div>
+
+  <div class="panel chat-col">
+    <div class="persona-bar">
+      <label for="personaSelect">Employee profile</label>
+      <select id="personaSelect"></select>
+      <span class="persona-hint" id="personaHint"></span>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="messages" id="messages"></div>
+    <div class="input-row">
+      <input id="queryInput" type="text" placeholder="Ask a real L&D question…" />
+      <button id="sendBtn">Ask</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">Agent Trace</div>
+    <div class="trace" id="trace"><div class="trace-empty">// Waiting for a query. Every step the agent takes will print here.</div></div>
+  </div>
+</div>
+
+<footer>Answers are grounded only in the documents on the left, weighted by relevance to the selected employee profile — every response shows a confidence score, and low-confidence answers are flagged for a human trainer instead of guessed.</footer>
+
+<script>
+const KB = [
+  {
+    id: "safety",
+    title: "Induction Furnace Safety & Shutdown Procedure",
+    tag: "Safety",
+    levelTags: ["new-hire", "L1", "L2", "L3", "L4"],
+    content: `Before starting the induction furnace, operators must wear full PPE: heat-resistant gloves, face shield, and insulated boots. Verify the cooling water circuit is active before power-up — never energize the furnace with the cooling system offline. During operation, monitor the temperature gauge every 15 minutes and log readings on the shift sheet. If unusual vibration or noise is detected from the drive, stop the furnace immediately and do not attempt to diagnose it while running. For a planned shutdown: first reduce power in stages over 10 minutes, then switch off the induction coil, keep the cooling water circulating for a further 20 minutes to allow gradual cooling, and only then shut off the water circuit. Never shut off cooling water while the furnace is still hot. Any shutdown outside this sequence must be reported to the shift supervisor within one hour, and treated as a near-miss if it followed an abnormal reading.`
+  },
+  {
+    id: "onboarding",
+    title: "New Hire Onboarding Checklist",
+    tag: "Onboarding",
+    levelTags: ["new-hire"],
+    content: `All new hires complete a 3-day induction before floor assignment. Day 1 covers plant safety orientation, PPE fitting, and emergency procedures — this is mandatory before entering any production area. Day 2 covers role-specific shadowing with an assigned mentor for a minimum of 6 hours, and an introduction to the relevant machine or process area. Day 3 includes a basic skills assessment and sign-off from the shift supervisor before the employee is cleared for independent work under supervision. New hires remain on a 90-day probation period with weekly check-ins from their supervisor. A skill gap identified during probation should be logged in the training system so a follow-up module can be assigned. Employees who do not complete Day 1 safety orientation cannot be scheduled for any shift.`
+  },
+  {
+    id: "skills",
+    title: "Rolling Mill Technician Skill Matrix",
+    tag: "Skills",
+    levelTags: ["new-hire", "L1", "L2", "L3", "L4"],
+    content: `A Rolling Mill Technician role requires four core skill areas. Level 1 (entry): basic machine operation, reading gauge panels, and PPE compliance — required before any independent shift. Level 2: fault recognition, including vibration and noise diagnostics, and safe stop procedures — typically reached after 6 months. Level 3: adjustment and calibration of roll settings, and interpreting quality inspection reports — typically reached after 18 months with supervisor sign-off. Level 4 (senior): training junior technicians and handling non-standard fault escalation — reserved for technicians with 3+ years and a clean safety record. Each level requires a practical assessment, not just a written test, before advancement. Skill levels should be reviewed every 6 months and updated in the employee's training record.`
+  },
+  {
+    id: "incident",
+    title: "Near-Miss Incident Reporting Procedure",
+    tag: "Safety",
+    levelTags: ["new-hire", "L1", "L2", "L3", "L4"],
+    content: `A near-miss is any event that could have caused injury or equipment damage but did not. All employees are required to report a near-miss within 1 hour of occurrence, regardless of how minor it seemed. Reporting steps: first, ensure the immediate area is safe and no one is at risk. Second, inform your shift supervisor verbally as soon as possible. Third, log the incident in the plant safety system with a brief description, location, and time — photos are encouraged if safe to take. Fourth, the shift supervisor reviews the report within 24 hours and determines if a wider safety bulletin is needed. Employees will never face disciplinary action for reporting a near-miss in good faith — the goal is prevention, not blame. Repeated near-misses in the same area are escalated to the plant safety committee.`
+  },
+  {
+    id: "catalog",
+    title: "Training Catalog — Current Modules",
+    tag: "Catalog",
+    levelTags: ["new-hire", "L1", "L2", "L3", "L4"],
+    content: `Available L&D modules this quarter: "Furnace Safety Fundamentals" (2 hours, mandatory for furnace-area staff), "Rolling Mill Fault Diagnostics" (4 hours, Level 2 technicians), "Incident Reporting & Near-Miss Culture" (1 hour, all staff), "Mentoring New Hires" (3 hours, Level 4 technicians and supervisors), and "Quality Inspection Basics" (2.5 hours, Level 3 technicians). Modules are self-paced through the LMS except Fault Diagnostics, which requires a hands-on session booked with a trainer. Employees can request a module outside their current level with supervisor approval. Completion is logged automatically and reflected in the employee's skill matrix within 48 hours.`
+  },
+  {
+    id: "loto",
+    title: "Electrical Lockout-Tagout (LOTO) Procedure",
+    tag: "Safety",
+    levelTags: ["L2", "L3", "L4"],
+    content: `Lockout-Tagout applies before any maintenance, adjustment, or clearing of a jam on electrically powered equipment. Step 1: notify affected operators that the machine is going down for LOTO. Step 2: shut the machine down using its normal stop procedure. Step 3: isolate the energy source at the main disconnect and apply a personal lock and tag — never work on shared equipment using someone else's lock. Step 4: verify zero energy state by attempting to start the machine with controls in the off position before touching any component. Step 5: perform the work. Step 6: once clear, remove tools, restore guards, and only the technician who applied the lock may remove it. A second technician's lock must never be removed by anyone else except through the documented multi-lock or supervisor override process. LOTO training is mandatory for Level 2 technicians and above before they are authorized to perform isolated maintenance.`
+  },
+  {
+    id: "quality",
+    title: "Quality Inspection Basics — Standard Operating Procedure",
+    tag: "Skills",
+    levelTags: ["L3", "L4"],
+    content: `Quality inspection at the rolling mill covers dimensional checks, surface defect screening, and material traceability. Dimensional checks use a calibrated gauge every 30 minutes during a run, with readings logged against the tolerance band on the job card — anything outside tolerance triggers an immediate hold and supervisor notification. Surface defects (scale, laps, cracks) are screened visually under the line's inspection lighting; any technician can flag a suspected defect, but only a Level 3+ technician can sign off a batch as compliant. Material traceability means every coil is logged with its heat number before it leaves the mill, since a defect found downstream must be traced back to source. Quality holds are never cleared verbally — clearance requires a signed entry in the quality log. This procedure feeds directly into the "Quality Inspection Basics" training module for technicians approaching Level 3.`
+  }
+];
+
+// ---------- PERSONALIZATION ----------
+// Basic personalization: each persona carries a levelTag used to boost
+// retrieval toward documents relevant to that employee's role/level, and a
+// short profile line injected into the model prompt so tone/depth/module
+// recommendations match who is actually asking.
+const PERSONAS = [
+  { id: "new-hire", label: "New Hire (Week 1)", levelTag: "new-hire",
+    profile: "a brand-new hire in their first week, still completing induction — explanations should be simple, safety-first, and avoid assuming prior plant experience." },
+  { id: "L1", label: "Level 1 Technician", levelTag: "L1",
+    profile: "a Level 1 Rolling Mill Technician (entry level, cleared for independent basic operation) — keep answers practical and tied to what they're authorized to do at Level 1." },
+  { id: "L2", label: "Level 2 Technician", levelTag: "L2",
+    profile: "a Level 2 Rolling Mill Technician (fault recognition and safe-stop authorized) — answers can reference diagnostics and isolation procedures relevant to their level." },
+  { id: "L3", label: "Level 3 Technician", levelTag: "L3",
+    profile: "a Level 3 Rolling Mill Technician (calibration and quality sign-off authorized) — answers can reference quality and calibration responsibilities relevant to their level." },
+  { id: "L4", label: "Level 4 / Supervisor", levelTag: "L4",
+    profile: "a Level 4 senior technician or supervisor — answers can reference mentoring, escalation, and sign-off responsibilities relevant to their level." }
+];
+let currentPersona = PERSONAS[0];
+
+// Rolling short-term memory so follow-up questions ("what about..." /
+// "and after that?") are answered with awareness of the prior turn,
+// instead of the agent treating every query as a cold start.
+const conversationHistory = [];
+const MAX_HISTORY_TURNS = 3;
+
+const STOPWORDS = new Set(["the","a","an","is","are","was","were","to","of","and","or","in","on","for","with","what","how","do","does","i","my","should","before","after","this","that","it","be","as","at","by","from","can","you","your","if","not","no"]);
+
+function tokenize(str) {
+  return str.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w && !STOPWORDS.has(w));
+}
+
+function chunkDoc(doc) {
+  const sentences = doc.content.split(/(?<=\.)\s+/);
+  const chunks = [];
+  for (let i = 0; i < sentences.length; i += 2) {
+    chunks.push({ docId: doc.id, docTitle: doc.title, docTag: doc.tag, levelTags: doc.levelTags || [], text: sentences.slice(i, i + 2).join(" ") });
+  }
+  return chunks;
+}
+
+const ALL_CHUNKS = KB.flatMap(chunkDoc);
+
+// Upgraded RAG scoring: term-frequency relevance (not just presence),
+// a small relevance boost when the chunk's document is tagged for the
+// active employee persona (domain/personalization signal), and a
+// normalized 0-1 confidence score so the agent can decide whether it
+// actually trusts the answer instead of always guessing.
+function searchKB(query, topN = 3, persona = currentPersona) {
+  const qTokens = tokenize(query);
+  if (qTokens.length === 0) return [];
+  const scored = ALL_CHUNKS.map(chunk => {
+    const cTokens = tokenize(chunk.text);
+    const cTokenSet = new Set(cTokens);
+    let rawScore = 0;
+    qTokens.forEach(t => {
+      if (cTokenSet.has(t)) {
+        const freq = cTokens.filter(ct => ct === t).length;
+        rawScore += 1 + Math.min(freq - 1, 2) * 0.25; // mild TF weighting, diminishing returns
+      }
+    });
+    const personaBoost = persona && chunk.levelTags.includes(persona.levelTag) ? 0.6 : 0;
+    const totalScore = rawScore + personaBoost;
+    const confidence = Math.min(1, rawScore / qTokens.length) * (personaBoost > 0 ? 1 : 0.92);
+    return { ...chunk, rawScore, personaBoost, score: totalScore, confidence };
+  }).filter(c => c.rawScore > 0);
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topN);
+}
+
+function matchDocByTitle(query) {
+  const qTokens = new Set(tokenize(query));
+  let best = null, bestScore = 0;
+  KB.forEach(doc => {
+    const tTokens = tokenize(doc.title);
+    let score = 0;
+    tTokens.forEach(t => { if (qTokens.has(t)) score += 1; });
+    if (score > bestScore) { bestScore = score; best = doc; }
+  });
+  return bestScore > 0 ? best : null;
+}
+
+// ---------- UI RENDER ----------
+const kbListEl = document.getElementById("kbList");
+let openDocId = null;
+function renderKB() {
+  kbListEl.innerHTML = "";
+  KB.forEach(doc => {
+    const card = document.createElement("div");
+    card.className = "kb-card" + (openDocId === doc.id ? " doc-open" : "");
+    card.innerHTML = `<span class="tag">${doc.tag}</span><div class="title">${doc.title}</div>`;
+    card.onclick = () => { openDocId = openDocId === doc.id ? null : doc.id; renderKB(); };
+    kbListEl.appendChild(card);
+    if (openDocId === doc.id) {
+      const preview = document.createElement("div");
+      preview.className = "kb-preview";
+      preview.textContent = doc.content;
+      kbListEl.appendChild(preview);
+    }
+  });
+}
+renderKB();
+
+const personaSelectEl = document.getElementById("personaSelect");
+const personaHintEl = document.getElementById("personaHint");
+PERSONAS.forEach(p => {
+  const opt = document.createElement("option");
+  opt.value = p.id;
+  opt.textContent = p.label;
+  personaSelectEl.appendChild(opt);
+});
+function updatePersonaHint() {
+  personaHintEl.textContent = "Retrieval + responses now weighted for: " + currentPersona.label;
+}
+personaSelectEl.onchange = () => {
+  currentPersona = PERSONAS.find(p => p.id === personaSelectEl.value) || PERSONAS[0];
+  updatePersonaHint();
+};
+updatePersonaHint();
+
+const chipsEl = document.getElementById("chips");
+const SAMPLE_QUERIES = [
+  { text: "What's the safe shutdown procedure for the induction furnace?" },
+  { text: "Summarize the New Hire Onboarding Checklist" },
+  { text: "What skills does a Rolling Mill Technician need?" },
+  { text: "How do I report a near-miss incident?" },
+  { text: "What's the capital of France?", offtopic: true },
+];
+SAMPLE_QUERIES.forEach(sq => {
+  const chip = document.createElement("div");
+  chip.className = "chip" + (sq.offtopic ? " offtopic" : "");
+  chip.textContent = sq.offtopic ? "Try off-topic ↗" : sq.text;
+  chip.title = sq.text;
+  chip.onclick = () => { queryInput.value = sq.text; runAgent(sq.text); };
+  chipsEl.appendChild(chip);
+});
+
+const messagesEl = document.getElementById("messages");
+const traceEl = document.getElementById("trace");
+const queryInput = document.getElementById("queryInput");
+const sendBtn = document.getElementById("sendBtn");
+const stages = document.querySelectorAll(".pipeline .stage");
+
+function setStage(name) {
+  stages.forEach(s => s.classList.toggle("active", s.dataset.stage === name));
+}
+
+function addMessage(role, text, opts = {}) {
+  const div = document.createElement("div");
+  div.className = "msg " + role + (opts.refused ? " refused" : "") + (opts.pending ? " pending" : "") + (opts.followup ? " followup" : "");
+  div.textContent = text;
+  if (opts.sources) {
+    const src = document.createElement("span");
+    src.className = "src";
+    src.textContent = (opts.refused ? "⚠ " : "✓ Grounded in: ") + opts.sources;
+    div.appendChild(src);
+  }
+  if (typeof opts.confidence === "number") {
+    const band = opts.confidence >= 0.7 ? "high" : opts.confidence >= 0.4 ? "med" : "low";
+    const label = band === "high" ? "High confidence" : band === "med" ? "Medium confidence — worth a second look" : "Low confidence — recommend human trainer follow-up";
+    const conf = document.createElement("span");
+    conf.className = "conf " + band;
+    conf.textContent = `◆ ${label} (${Math.round(opts.confidence * 100)}%)`;
+    div.appendChild(conf);
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
+}
+
+function traceLog(html) {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      const line = document.createElement("div");
+      line.className = "trace-line";
+      line.innerHTML = "&gt; " + html;
+      traceEl.appendChild(line);
+      traceEl.scrollTop = traceEl.scrollHeight;
+      resolve();
+    }, 260);
+  });
+}
+function clearTrace() { traceEl.innerHTML = ""; }
+
+async function callClaude(system, userContent) {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system,
+        messages: [{ role: "user", content: userContent }]
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const textBlock = (data.content || []).find(b => b.type === "text");
+    return textBlock ? textBlock.text : null;
+  } catch (e) {
+    return null; // network/CORS blocked in this environment — caller falls back to local synthesis
+  }
+}
+
+// Deterministic local fallback so the demo always produces a grounded answer,
+// even in environments that block the live API call (no external dependency).
+function localSummarize(doc) {
+  const sentences = doc.content.split(/(?<=\.)\s+/).filter(Boolean);
+  const bullets = sentences.slice(0, 6).map(s => "• " + s.trim());
+  return bullets.join("\n");
+}
+function localAnswer(hits, query) {
+  const byDoc = {};
+  hits.forEach(h => { (byDoc[h.docTitle] = byDoc[h.docTitle] || []).push(h.text); });
+  let out = "Here's what the knowledge base says:\n";
+  Object.entries(byDoc).forEach(([title, texts]) => {
+    out += `\n${title}:\n` + texts.map(t => "• " + t.trim()).join("\n") + "\n";
+  });
+  return out.trim();
+}
+
+const LOW_CONFIDENCE_THRESHOLD = 0.35;
+
+function pushHistory(query, answer, docTitles) {
+  conversationHistory.push({ query, answer, docTitles });
+  while (conversationHistory.length > MAX_HISTORY_TURNS) conversationHistory.shift();
+}
+
+function historyAsContext() {
+  if (conversationHistory.length === 0) return "";
+  return "Recent conversation (for follow-up context only — still ground the new answer in the excerpts below):\n" +
+    conversationHistory.map((h, i) => `Q${i + 1}: ${h.query}\nA${i + 1}: ${h.answer}`).join("\n") + "\n\n";
+}
+
+async function runAgent(query) {
+  if (!query || !query.trim()) return;
+  sendBtn.disabled = true;
+  clearTrace();
+  addMessage("user", query);
+  queryInput.value = "";
+
+  setStage("input");
+  await traceLog(`Received query: <span class="tag-hit">"${query}"</span>`);
+  await traceLog(`Active profile: <span class="tag-hit">${currentPersona.label}</span>`);
+  const isFollowup = conversationHistory.length > 0 && /\b(that|it|those|then|after|also|what about)\b/i.test(query);
+  if (isFollowup) {
+    await traceLog(`<span class="tag-hit">Follow-up detected</span> — carrying forward last ${conversationHistory.length} turn(s) of context`);
+  }
+
+  const isSummarize = /summar/i.test(query);
+  let pendingMsg = addMessage("agent", "Working…", { pending: true });
+
+  if (isSummarize) {
+    setStage("retrieve");
+    await traceLog(`Tool selected: <span class="tag-tool">SUMMARIZE_DOCUMENT</span>`);
+    const target = matchDocByTitle(query);
+    if (!target) {
+      await traceLog(`<span class="tag-warn">No matching document found in knowledge base.</span>`);
+      setStage("output");
+      pendingMsg.remove();
+      addMessage("agent", "I couldn't match that to a document in the knowledge base. Try naming the document more specifically.", { refused: true, sources: "none" });
+      sendBtn.disabled = false;
+      return;
+    }
+    await traceLog(`Target document: <span class="tag-hit">${target.title}</span>`);
+    setStage("personalize");
+    await traceLog(`Tailoring for <span class="tag-hit">${currentPersona.label}</span> (depth/jargon level)…`);
+    await traceLog("Calling language model with full document text…");
+    let answer = await callClaude(
+      `You are the L&D knowledge assistant for a steel plant. The reader is ${currentPersona.profile} Summarize the given document in 4-6 short, plain-language bullet points this reader can scan quickly, pitched at their level. No jargon.`,
+      target.content
+    );
+    let usedFallback = false;
+    if (answer === null) {
+      await traceLog(`<span class="tag-warn">Live model call unavailable in this environment</span> — falling back to local synthesis…`);
+      answer = localSummarize(target);
+      usedFallback = true;
+    }
+    await traceLog(`Response generated. Source: <span class="tag-hit">${target.title}</span>`);
+    setStage("output");
+    pendingMsg.remove();
+    addMessage("agent", answer, { sources: target.title + (usedFallback ? " (local synthesis — live model unavailable)" : ""), confidence: 0.95 });
+    pushHistory(query, answer, [target.title]);
+  } else {
+    setStage("retrieve");
+    await traceLog(`Tool selected: <span class="tag-tool">SEARCH_KNOWLEDGE_BASE</span> (no summarize keyword detected)`);
+    await traceLog("Querying knowledge base (term-relevance ranked)…");
+    const hits = searchKB(query, 3);
+    if (hits.length === 0) {
+      await traceLog(`<span class="tag-warn">0 relevant chunks found — refusing to answer ungrounded.</span>`);
+      setStage("output");
+      pendingMsg.remove();
+      addMessage("agent", "That's not covered in the L&D knowledge base I have access to, so I won't guess. Try rephrasing, or this may need a human trainer.", { refused: true, sources: "no match" });
+      sendBtn.disabled = false;
+      return;
+    }
+    const docTitles = [...new Set(hits.map(h => h.docTitle))];
+    const topConfidence = Math.max(...hits.map(h => h.confidence));
+    const boosted = hits.some(h => h.personaBoost > 0);
+    await traceLog(`Retrieved <span class="tag-hit">${hits.length}</span> chunk(s) from: ${docTitles.join(", ")} — confidence <span class="tag-hit">${Math.round(topConfidence * 100)}%</span>`);
+    if (boosted) {
+      await traceLog(`<span class="tag-hit">Relevance boosted</span> — matched doc(s) tagged for ${currentPersona.label}`);
+    }
+    setStage("personalize");
+    await traceLog(`Tailoring response for <span class="tag-hit">${currentPersona.label}</span>…`);
+    if (topConfidence < LOW_CONFIDENCE_THRESHOLD) {
+      await traceLog(`<span class="tag-warn">Confidence below ${Math.round(LOW_CONFIDENCE_THRESHOLD * 100)}% threshold</span> — will flag for human trainer instead of asserting certainty.`);
+    }
+    await traceLog("Calling language model with grounded context" + (isFollowup ? " + recent conversation" : "") + "…");
+    const context = hits.map((h, i) => `[${i + 1}] (${h.docTitle}) ${h.text}`).join("\n");
+    const system = `You are the L&D knowledge assistant for a steel plant. The reader is ${currentPersona.profile} Answer the employee's question using ONLY the provided context excerpts, at a depth appropriate to their level. Keep it short and practical (a few sentences or a short numbered list). If the context doesn't fully answer the question, say what's missing rather than guessing. Do not restate the raw excerpts verbatim; explain in your own plain words.${topConfidence < LOW_CONFIDENCE_THRESHOLD ? " The retrieved context only weakly matches this question — lead by saying this is a partial match and recommend confirming with a human trainer." : ""}`;
+    let answer = await callClaude(system, `${historyAsContext()}Context:\n${context}\n\nQuestion: ${query}`);
+    let usedFallback = false;
+    if (answer === null) {
+      await traceLog(`<span class="tag-warn">Live model call unavailable in this environment</span> — falling back to local synthesis…`);
+      answer = localAnswer(hits, query);
+      if (topConfidence < LOW_CONFIDENCE_THRESHOLD) {
+        answer = "⚠ This is a partial match at best — recommend confirming with a human trainer.\n\n" + answer;
+      }
+      usedFallback = true;
+    }
+    await traceLog(`Response generated. Sources cited: <span class="tag-hit">${docTitles.join(", ")}</span>`);
+    setStage("output");
+    pendingMsg.remove();
+    addMessage("agent", answer, {
+      sources: docTitles.join(", ") + (usedFallback ? " (local synthesis — live model unavailable)" : ""),
+      confidence: topConfidence,
+      followup: isFollowup
+    });
+    pushHistory(query, answer, docTitles);
+  }
+  sendBtn.disabled = false;
+}
+
+sendBtn.onclick = () => runAgent(queryInput.value);
+queryInput.addEventListener("keydown", e => { if (e.key === "Enter") runAgent(queryInput.value); });
+</script>
+</body>
+</html>
